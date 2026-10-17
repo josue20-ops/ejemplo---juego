@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#080b16">
-  <meta name="description" content="CAOS: Noche de supervivencia. Sobrevive a las oleadas, mejora tu equipo y derrota al jefe final.">
-  <title>CAOS: Noche de supervivencia</title>
+  <meta name="description" content="CAOS: supervivencia y duelos online 1 contra 1.">
+  <title>CAOS: Supervivencia Online</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -74,13 +74,18 @@
           </div>
         </div>
 
-        <div id="startOverlay" class="overlay">
+        <div id="startOverlay" class="overlay hidden">
           <div class="modal">
             <div class="symbol">⚡</div>
             <div class="modal-kicker">Protocolo de emergencia activo</div>
             <h2>LA NOCHE<br><span class="accent">TE PERTENECE.</span></h2>
-            <p>La ciudad cayó. Las criaturas vienen por ti. Sobrevive a las oleadas, recoge energía y construye una máquina de destrucción.</p>
-            <button id="startBtn" class="main-btn" type="button">▶ INICIAR SUPERVIVENCIA</button>
+            <p>Sobrevive a las oleadas en solitario o reta a otro jugador en un duelo online 1 contra 1.</p>
+            <div class="mode-buttons">
+              <button id="startBtn" class="main-btn" type="button">▶ JUGAR EN SOLITARIO</button>
+              <button id="onlineBtn" class="main-btn online-main-btn" type="button">⚔ JUGAR ONLINE 1 VS 1</button>
+            </div>
+            <button id="changeNameBtn" class="secondary-btn change-name-btn" type="button">Cambiar nombre de jugador</button>
+            <div class="menu-player-name">JUGADOR: <strong id="displayNameMenu">---</strong></div>
             <div class="mini-features">
               <span class="pill">◆ Mejoras aleatorias</span>
               <span class="pill">◆ Jefes especiales</span>
@@ -129,6 +134,23 @@
             </div>
           </div>
         </div>
+
+        <div id="nameOverlay" class="overlay name-overlay">
+          <div class="modal name-modal">
+            <div class="symbol">✦</div>
+            <div class="modal-kicker">Identificación de jugador</div>
+            <h2>ELIGE TU <span class="accent">NOMBRE</span></h2>
+            <p>Escribe el nombre que verán los demás jugadores cuando entres a una partida online.</p>
+            <form id="nameForm" class="name-form">
+              <label for="playerNameInput">Nombre de jugador</label>
+              <input id="playerNameInput" name="playerName" type="text" minlength="2" maxlength="16" pattern="[A-Za-zÀ-ÿ0-9 _-]{2,16}" autocomplete="nickname" placeholder="Ej. Josue_01" required>
+              <div class="name-rules">Entre 2 y 16 caracteres. Puedes usar letras, números, espacios, guion y guion bajo.</div>
+              <p id="nameError" class="name-error hidden" role="alert"></p>
+              <button class="main-btn" type="submit">CONTINUAR</button>
+            </form>
+            <div class="best-label">Por ahora es un nombre visible, no una cuenta ni contraseña.</div>
+          </div>
+        </div>
       </section>
 
       <div class="bottom-info">
@@ -147,6 +169,77 @@
     </footer>
   </div>
 
+  <div id="onlineScreen" class="online-screen hidden" aria-hidden="true">
+    <div class="online-shell">
+      <header class="online-topbar">
+        <div class="online-brand">
+          <div class="logo">⚔</div>
+          <div><div class="eyebrow">CAOS · Multijugador</div><h1>DUELO <span>ONLINE</span> 1 VS 1</h1></div>
+        </div>
+        <div class="online-top-actions">
+          <span id="onlineConnection" class="connection-state">Conectando al servidor…</span>
+          <button id="onlineExitBtn" class="small-btn" type="button">← Menú</button>
+        </div>
+      </header>
+
+      <main class="online-content">
+        <section id="onlineLobby" class="online-lobby">
+          <div class="symbol">⚡</div>
+          <div class="modal-kicker">Arena de combate</div>
+          <h2>ENCUENTRA A TU <span class="accent">RIVAL</span></h2>
+          <p id="onlineMessage">Conectando al servidor de partidas…</p>
+          <div class="online-lobby-player">JUGANDO COMO <strong id="onlineCurrentName">---</strong></div>
+          <button id="findMatchBtn" class="main-btn" type="button" disabled>BUSCAR RIVAL</button>
+          <button id="cancelQueueBtn" class="secondary-btn hidden" type="button">Cancelar búsqueda</button>
+          <button id="onlineChangeNameBtn" class="secondary-btn online-change-name" type="button">Cambiar nombre</button>
+          <div class="online-rules">
+            <div><span>W A S D</span> o flechas para moverte</div>
+            <div><span>Clic izquierdo</span> o <span>ESPACIO</span> para disparar</div>
+            <div>La mira apunta automáticamente al rival.</div>
+          </div>
+        </section>
+
+        <section id="onlineMatchPanel" class="online-match hidden">
+          <div class="online-scoreboard">
+            <div class="online-player-info self-player">
+              <div class="online-player-label">TÚ <strong id="onlineMeName">Jugador</strong></div>
+              <div class="online-health-row"><span>VIDA</span><b id="onlineMeHp">100 / 100</b></div>
+              <div class="online-health"><i id="onlineMeHealth"></i></div>
+            </div>
+            <div class="versus-mark">VS</div>
+            <div class="online-player-info rival-player">
+              <div class="online-player-label">RIVAL <strong id="onlineRivalName">Esperando…</strong></div>
+              <div class="online-health-row"><span>VIDA</span><b id="onlineRivalHp">100 / 100</b></div>
+              <div class="online-health rival-health"><i id="onlineRivalHealth"></i></div>
+            </div>
+          </div>
+          <div class="online-stage">
+            <canvas id="onlineCanvas" width="1000" height="620" aria-label="Arena online uno contra uno"></canvas>
+            <div id="onlineResultOverlay" class="overlay hidden">
+              <div class="modal">
+                <div class="symbol" id="onlineResultSymbol">⚔</div>
+                <div class="modal-kicker">Fin del combate</div>
+                <h2 id="onlineResultTitle">PARTIDA <span class="accent">FINALIZADA</span></h2>
+                <p id="onlineResultText">El combate terminó.</p>
+                <button id="onlineRematchBtn" class="main-btn" type="button">BUSCAR OTRO RIVAL</button>
+                <button id="onlineMenuBtn" class="secondary-btn online-menu-btn" type="button">VOLVER AL MENÚ</button>
+              </div>
+            </div>
+            <div class="online-touch-controls" id="onlineTouchControls">
+              <div id="onlineJoystick" class="joystick" aria-label="Joystick de movimiento"><div id="onlineJoyKnob" class="joy-knob"></div></div>
+              <button id="onlineFireTouch" class="round-control" type="button">DISPARAR</button>
+            </div>
+          </div>
+          <div class="online-controls-hint"><span><kbd class="key">W A S D</kbd> Mover</span><span><kbd class="key">CLIC IZQUIERDO</kbd> / <kbd class="key">ESPACIO</kbd> Disparar</span><span>Mira automática al rival</span></div>
+        </section>
+      </main>
+      <footer class="online-footer">Las partidas funcionan mientras el servidor esté activo. Todavía no se guardan estadísticas en una base de datos.</footer>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
   <script src="js/game.js"></script>
+  <script src="js/lobby.js"></script>
+  <script src="js/online.js"></script>
 </body>
 </html>

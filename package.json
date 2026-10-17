@@ -1,0 +1,17 @@
+{
+  "name": "caos-noche-supervivencia",
+  "version": "1.1.0",
+  "description": "CAOS: juego arcade de supervivencia y duelos online 1 contra 1",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+}

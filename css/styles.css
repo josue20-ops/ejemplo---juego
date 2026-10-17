@@ -113,3 +113,91 @@ canvas { display:block; width:100%; height:auto; aspect-ratio:1000/620; touch-ac
 /* Estilos que antes estaban escritos directamente en el HTML. */
 .xp-coins { display: flex; justify-content: space-between; margin-top: 5px; font-size: 9px; color: #8d9fc5; }
 .new-record { color: var(--gold); font-weight: 950; margin-bottom: 13px; }
+
+/* Pantalla para elegir el nombre de jugador */
+.name-modal { width: min(480px, 100%); }
+.name-form { display: flex; flex-direction: column; align-items: stretch; gap: 9px; text-align: left; }
+.name-form label { color: #dfe8ff; font-weight: 850; font-size: 12px; }
+.name-form input { width: 100%; border: 1px solid rgba(126,163,255,.38); border-radius: 10px; outline: none; background: rgba(5,10,24,.9); color: var(--text); padding: 13px 14px; font: inherit; font-size: 15px; }
+.name-form input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(84,242,232,.12); }
+.name-form .main-btn { margin-top: 7px; }
+.name-rules { color: #8192b7; font-size: 10px; line-height: 1.5; }
+.name-error { color: #ff8fac !important; font-size: 12px !important; margin: 2px 0 !important; }
+.mode-buttons { display: grid; grid-template-columns: 1fr; gap: 9px; }
+.online-main-btn { background: linear-gradient(100deg, #9b7bff, #c0aaff); color: #100b25; box-shadow: 0 8px 24px rgba(155,123,255,.17); }
+.change-name-btn { margin-top: 9px; width: 100%; }
+.menu-player-name { margin-top: 10px; color: #788bb5; letter-spacing: .12em; font-weight: 800; font-size: 10px; }
+.menu-player-name strong { color: var(--cyan); letter-spacing: .04em; }
+
+/* Interfaz de duelo online */
+.online-screen { position: fixed; z-index: 100; inset: 0; overflow-y: auto; background: radial-gradient(ellipse at 50% -20%, #1a2451 0%, #080b16 58%); padding: 17px 18px 25px; }
+.online-screen.hidden { display: none !important; }
+.online-shell { width: min(1120px, 100%); margin: 0 auto; }
+.online-topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 17px; }
+.online-brand { display: flex; align-items: center; gap: 12px; }
+.online-brand h1 { font-size: clamp(19px, 3vw, 27px); letter-spacing: .04em; margin: 2px 0 0; font-weight: 950; }
+.online-brand h1 span { color: var(--cyan); }
+.online-top-actions { display: flex; align-items: center; gap: 12px; }
+.connection-state { color: #ffbd75; font-size: 11px; font-weight: 850; }
+.connection-state.connected { color: var(--green); }
+.online-content { min-height: 65vh; display: flex; flex-direction: column; justify-content: center; }
+.online-lobby { width: min(470px, 100%); margin: 25px auto; padding: clamp(23px, 4vw, 36px); border: 1px solid rgba(126,163,255,.32); border-radius: 21px; background: linear-gradient(145deg, rgba(20,29,53,.98), rgba(9,14,29,.98)); box-shadow: 0 24px 80px rgba(0,0,0,.38); text-align: center; }
+.online-lobby h2 { margin: 8px 0 10px; font-size: clamp(26px, 4vw, 38px); line-height: 1.04; letter-spacing: -.04em; }
+.online-lobby h2 .accent { color: var(--cyan); }
+.online-lobby p { margin: 0 auto 17px; color: #a8b5d3; font-size: 13px; line-height: 1.6; }
+.online-lobby-player { margin: 0 0 17px; padding: 11px; border: 1px solid rgba(84,242,232,.18); border-radius: 10px; color: #8394b8; font-weight: 850; letter-spacing: .12em; font-size: 10px; }
+.online-lobby-player strong { color: var(--cyan); display: block; margin-top: 5px; font-size: 16px; letter-spacing: .02em; }
+.online-lobby .main-btn:disabled { cursor: not-allowed; opacity: .45; filter: grayscale(.45); }
+.online-lobby > .secondary-btn { width: 100%; margin-top: 9px; }
+.online-rules { display: grid; gap: 8px; margin-top: 22px; color: #8e9fc4; font-size: 11px; }
+.online-rules span { color: #d9e4ff; font-weight: 900; }
+.online-match { width: 100%; }
+.online-scoreboard { display: grid; grid-template-columns: 1fr 55px 1fr; align-items: center; gap: 15px; margin-bottom: 12px; }
+.online-player-info { padding: 13px 16px; border: 1px solid rgba(126,163,255,.25); border-radius: 12px; background: rgba(15,23,43,.83); min-width: 0; }
+.online-player-label { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; color: #8294b9; font-size: 9px; font-weight: 950; letter-spacing: .15em; margin-bottom: 10px; }
+.online-player-label strong { color: var(--cyan); font-size: 14px; letter-spacing: .01em; overflow-wrap: anywhere; }
+.rival-player .online-player-label strong { color: var(--pink); }
+.online-health-row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; color: #8294b9; font-size: 9px; font-weight: 900; }
+.online-health-row b { color: #e9f0ff; font-variant-numeric: tabular-nums; }
+.online-health { height: 7px; overflow: hidden; border-radius: 20px; background: #252e47; }
+.online-health i { display: block; height: 100%; width: 100%; border-radius: 20px; background: linear-gradient(90deg, #42dcd9, #75fff0); transition: width .1s; }
+.rival-health i { background: linear-gradient(90deg, #ff4f91, #ff9caf); }
+.versus-mark { text-align: center; color: var(--gold); font-size: 21px; font-weight: 1000; font-style: italic; text-shadow: 0 0 18px rgba(255,209,102,.25); }
+.online-stage { position: relative; width: 100%; overflow: hidden; border: 1px solid rgba(115,153,255,.3); border-radius: 16px; background: #090e1d; box-shadow: 0 18px 75px rgba(0,0,0,.4), 0 0 40px rgba(84,242,232,.05); }
+#onlineCanvas { display: block; width: 100%; height: auto; aspect-ratio: 1000 / 620; touch-action: none; cursor: crosshair; }
+.online-stage .overlay { background: rgba(4,7,17,.67); }
+.online-stage .modal { width: min(440px, 100%); }
+.online-menu-btn { width: 100%; margin-top: 9px; }
+.online-controls-hint { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 14px; padding: 12px 4px 0; color: #8b9cbe; font-size: 11px; }
+.online-controls-hint > span { display: flex; align-items: center; gap: 4px; }
+.online-footer { padding: 22px 3px 0; color: #65779d; font-size: 10px; text-align: center; }
+.online-touch-controls { display: none; position: absolute; inset: auto 0 12px; z-index: 4; align-items: end; justify-content: space-between; padding: 0 14px; pointer-events: none; }
+.online-touch-controls .joystick, .online-touch-controls .round-control { pointer-events: auto; }
+body.online-active { overflow: hidden; }
+
+@media (max-width: 720px) {
+  .online-screen { padding: 10px 9px 18px; }
+  .online-topbar { align-items: flex-start; gap: 8px; }
+  .online-brand { gap: 8px; }
+  .online-brand .logo { width: 39px; height: 39px; border-radius: 12px; font-size: 20px; }
+  .online-brand h1 { font-size: 18px; }
+  .online-top-actions { flex-direction: column-reverse; align-items: flex-end; gap: 7px; }
+  .connection-state { max-width: 145px; text-align: right; font-size: 9px; }
+  .online-scoreboard { grid-template-columns: 1fr 33px 1fr; gap: 6px; }
+  .online-player-info { padding: 9px; }
+  .online-player-label { gap: 4px; font-size: 8px; margin-bottom: 7px; }
+  .online-player-label strong { font-size: 11px; }
+  .online-health-row { font-size: 8px; }
+  .versus-mark { font-size: 15px; }
+  .online-touch-controls { display: flex; }
+  .online-controls-hint { font-size: 9px; gap: 7px; }
+  .online-controls-hint > span:last-child { display: none; }
+  .online-stage { border-radius: 12px; }
+}
+
+@media (max-width: 420px) {
+  .online-brand .eyebrow { font-size: 7px; }
+  .online-brand h1 { font-size: 15px; }
+  .online-top-actions .small-btn { padding: 7px 8px; font-size: 10px; }
+  .online-lobby { padding: 21px 15px; }
+}
