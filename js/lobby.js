@@ -10,12 +10,11 @@
   const nameError = $('nameError');
   const startOverlay = $('startOverlay');
   
-  // Asumimos que 'socket' está definido globalmente en online.js
-  // Si no es así, esto lanzará un error. Asegúrate de que socket.io esté cargado.
+  // CORRECCIÓN: Intentar usar un socket global para evitar múltiples conexiones.
   const socket = window.socket || io();
+  window.socket = socket; // Lo exponemos para que otros scripts lo usen
 
   // --- CREACIÓN DINÁMICA DE LA INTERFAZ DEL LOBBY ---
-  // Para que no tengas que tocar tu index.html, creamos los elementos aquí.
   const lobbyContainer = document.createElement('div');
   lobbyContainer.id = 'caos-lobby-container';
   lobbyContainer.style.marginTop = '20px';
@@ -23,7 +22,7 @@
   lobbyContainer.style.border = '1px solid rgba(255,255,255,0.2)';
   lobbyContainer.style.borderRadius = '8px';
   lobbyContainer.style.background = 'rgba(0,0,0,0.3)';
-  lobbyContainer.style.display = 'none'; // Oculto hasta que esté en el menú
+  lobbyContainer.style.display = 'none';
 
   const lobbyTitle = document.createElement('h3');
   lobbyTitle.textContent = 'Jugadores en línea';
@@ -49,11 +48,11 @@
   lobbyContainer.appendChild(lobbyEmptyMsg);
   lobbyContainer.appendChild(lobbyList);
 
-  // Insertamos el lobby dentro de la pantalla de inicio
   if (startOverlay) {
-    // Lo insertamos antes del último botón o al final de la pantalla de inicio
     startOverlay.appendChild(lobbyContainer);
   }
+
+  let currentName = null; // Guardamos el nombre para reconexiones
 
   function normalizeName(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
@@ -86,13 +85,12 @@
   }
 
   function acceptName(name) {
+    currentName = name;
     window.CAOS_PLAYER_NAME = name;
     try {
       localStorage.setItem(NAME_KEY, name);
-    } catch (_) {
-      // El juego sigue funcionando aunque el navegador bloquee localStorage.
-    }
-    
+    } catch (_) {}
+
     $('displayNameMenu').textContent = name;
     $('onlineCurrentName').textContent = name;
     $('statusNote').textContent = `Jugador: ${name}. Elige a quién retar.`;
@@ -102,10 +100,11 @@
     startOverlay.classList.remove('hidden');
     hideNameError();
 
-    // Avisamos al servidor de nuestro nombre para entrar al lobby
-    socket.emit('register-player', { name });
+    // Si el socket está conectado, enviamos el registro
+    if (socket.connected) {
+      socket.emit('register-player', { name });
+    }
     
-    // Mostramos el contenedor del lobby
     lobbyContainer.style.display = 'block';
   }
 
@@ -122,24 +121,31 @@
   });
 
   $('changeNameBtn').addEventListener('click', showNameScreen);
-
   window.CAOS_SHOW_NAME_SCREEN = showNameScreen;
 
   try {
     const savedName = localStorage.getItem(NAME_KEY);
     if (savedName) nameInput.value = savedName;
-  } catch (_) {
-    // No se requiere almacenamiento local.
-  }
+  } catch (_) {}
 
-  // --- LÓGICA DE SOCKET PARA EL LOBBY ---
-  
-  // Escuchamos la lista de jugadores enviada por el servidor
+  // --- LÓGICA DE SOCKET ---
+
+  // Si el socket se reconecta (ej. recarga de página o microcorte), volvemos a registrar el nombre
+  socket.on('connect', () => {
+    if (currentName) {
+      socket.emit('register-player', { name: currentName });
+    }
+  });
+
+  socket.on('registration-result', (result) => {
+    if (!result.ok) {
+      alert(result.message);
+      showNameScreen(); // Devolvemos al usuario a la pantalla de nombre
+    }
+  });
+
   socket.on('lobby-list', (players) => {
-    // Limpiamos la lista actual
     lobbyList.innerHTML = '';
-    
-    // Filtramos para no mostrarnos a nosotros mismos
     const otherPlayers = players.filter(p => p.id !== socket.id);
 
     if (otherPlayers.length === 0) {
@@ -147,28 +153,27 @@
       lobbyEmptyMsg.textContent = 'No hay otros jugadores en línea. Esperando...';
     } else {
       lobbyEmptyMsg.style.display = 'none';
-      
       otherPlayers.forEach(player => {
         const li = document.createElement('li');
         li.style.marginBottom = '8px';
         
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'small-btn'; // Usa tus estilos existentes
+        btn.className = 'small-btn';
         btn.style.width = '100%';
         btn.style.display = 'flex';
         btn.style.justifyContent = 'space-between';
         btn.style.alignItems = 'center';
         btn.innerHTML = `<span>${player.name}</span> <span style="color:#54f2e8">⚔️ Retar</span>`;
         
-        // Al hacer clic, enviamos el reto
         btn.addEventListener('click', () => {
-          btn.textContent = 'Retando...';
+          btn.innerHTML = `<span>${player.name}</span> <span style="color:#aaa">Retando...</span>`;
           btn.disabled = true;
           socket.emit('challenge-player', player.id);
-          
-          // Si falla (porque el otro se fue), el servidor nos avisará
-          setTimeout(() => { btn.textContent = player.name + ' ⚔️ Retar'; btn.disabled = false; }, 3000);
+          setTimeout(() => { 
+            btn.innerHTML = `<span>${player.name}</span> <span style="color:#54f2e8">⚔️ Retar</span>`; 
+            btn.disabled = false; 
+          }, 3000);
         });
 
         li.appendChild(btn);
@@ -177,11 +182,9 @@
     }
   });
 
-  // Si intentamos retar a alguien que ya no está
   socket.on('challenge-error', (data) => {
     alert(data.message);
   });
 
-  // El usuario confirma el nombre en cada nueva sesión, aunque exista uno guardado.
   nameInput.focus();
 })();

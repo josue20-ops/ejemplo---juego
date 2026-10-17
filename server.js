@@ -44,18 +44,13 @@ function validName(name) {
   return name.length >= 2 && name.length <= 16 && /^[\p{L}\p{N} _-]+$/u.test(name);
 }
 
-// --- NUEVA FUNCIÓN PARA EL LOBBY ---
 function broadcastLobbyList() {
-  // Filtramos a los jugadores que están registrados, no están jugando y están en estado 'idle'
   const availablePlayers = Array.from(connectedPlayers.values())
     .filter(p => p.registered && p.state === 'idle' && !p.matchId)
     .map(p => ({ id: p.id, name: p.name }));
 
-  // Enviamos la lista a todos los jugadores que están en el lobby (idle)
   for (const [id, player] of connectedPlayers.entries()) {
     if (player.registered && player.state === 'idle' && !player.matchId) {
-      // Nos enviamos la lista a nosotros mismos también, para saber cuántos hay
-      // pero el cliente filtrará para no mostrarse a sí mismo
       io.to(id).emit('lobby-list', availablePlayers);
     }
   }
@@ -114,13 +109,11 @@ function finishMatch(match, winnerId, reason = 'finished') {
     if (player) {
       player.matchId = null;
       player.input = emptyInput();
-      player.state = 'idle'; // Vuelven al estado idle
+      player.state = 'idle';
     }
     if (socket) socket.leave(match.roomId);
   }
   activeMatches.delete(match.roomId);
-  
-  // Actualizamos el lobby para todos cuando termina una partida
   broadcastLobbyList(); 
 }
 
@@ -136,7 +129,7 @@ function createPlayerState(id, name, side) {
     input: emptyInput(),
     fireCooldown: 0,
     matchId: null,
-    state: 'playing', // Directamente a jugar
+    state: 'playing',
     registered: true
   };
 }
@@ -172,8 +165,6 @@ function startMatch(firstId, secondId) {
   firstSocket.emit('match-found', { roomId, opponentName: second.name });
   secondSocket.emit('match-found', { roomId, opponentName: first.name });
   emitMatchState(match);
-  
-  // Ocultamos a estos jugadores del lobby de los demás
   broadcastLobbyList();
   
   console.log(`[MATCH] ${first.name} vs ${second.name}`);
@@ -274,12 +265,24 @@ io.on('connection', (socket) => {
     }
 
     const lowerName = name.toLocaleLowerCase();
-    const isUsed = Array.from(connectedPlayers.values()).some((other) => {
-      return other.id !== socket.id && other.registered && other.name.toLocaleLowerCase() === lowerName;
+    
+    // CORRECCIÓN: Buscar si el nombre ya está en uso por OTRO socket
+    const existingPlayerEntry = Array.from(connectedPlayers.entries()).find(([id, other]) => {
+      return id !== socket.id && other.registered && other.name.toLocaleLowerCase() === lowerName;
     });
-    if (isUsed) {
-      socket.emit('registration-result', { ok: false, message: 'Ese nombre ya está siendo usado por otro jugador conectado. Elige uno diferente.' });
-      return;
+
+    if (existingPlayerEntry) {
+      const [oldId, oldPlayer] = existingPlayerEntry;
+      const oldSocket = io.sockets.sockets.get(oldId);
+      
+      if (oldSocket) {
+        // Si el socket viejo sigue "vivo" en el servidor, lo desconectamos.
+        // Esto pasa normalmente por reconexiones o doble pestaña.
+        console.log(`[CLEANUP] Desconectando sesión duplicada de: ${name}`);
+        oldSocket.disconnect(true);
+      }
+      // Eliminamos al jugador viejo del mapa para liberar el nombre
+      connectedPlayers.delete(oldId);
     }
 
     player.name = name;
@@ -288,24 +291,20 @@ io.on('connection', (socket) => {
     socket.emit('registration-result', { ok: true, name });
     console.log(`[JOIN] ${name} (${socket.id})`);
     
-    // Actualizamos la lista de espera al registrarse
     broadcastLobbyList();
   });
 
-  // --- NUEVO EVENTO PARA RETAR A ALGUIEN ---
   socket.on('challenge-player', (targetId) => {
     const challenger = connectedPlayers.get(socket.id);
     const target = connectedPlayers.get(targetId);
 
-    // Validaciones de seguridad
     if (!challenger || !challenger.registered || challenger.state !== 'idle') return;
     if (!target || !target.registered || target.state !== 'idle' || target.matchId) {
       socket.emit('challenge-error', { message: 'Ese jugador ya no está disponible.' });
-      broadcastLobbyList(); // Refrescamos por si acaso
+      broadcastLobbyList();
       return;
     }
 
-    // Iniciar la partida inmediatamente
     startMatch(socket.id, targetId);
   });
 
@@ -345,8 +344,6 @@ io.on('connection', (socket) => {
     }
     if (player) console.log(`[LEAVE] ${player.name || socket.id}`);
     connectedPlayers.delete(socket.id);
-    
-    // Actualizamos el lobby cuando alguien se va
     broadcastLobbyList();
   });
 });
@@ -368,5 +365,4 @@ setInterval(() => {
 
 httpServer.listen(PORT, () => {
   console.log(`CAOS online está listo en http://localhost:${PORT}`);
-  console.log('Abre dos ventanas o dos dispositivos para probar el modo 1 contra 1.');
 });
