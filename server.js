@@ -22,6 +22,7 @@ const TICK_RATE = 30;
 const SNAPSHOT_INTERVAL_MS = 50;
 
 const connectedPlayers = new Map();
+const matchmakingQueue = []; // Restauramos la cola
 const activeMatches = new Map();
 let nextMatchNumber = 1;
 let previousTick = Date.now();
@@ -44,15 +45,26 @@ function validName(name) {
   return name.length >= 2 && name.length <= 16 && /^[\p{L}\p{N} _-]+$/u.test(name);
 }
 
-function broadcastLobbyList() {
-  const availablePlayers = Array.from(connectedPlayers.values())
-    .filter(p => p.registered && p.state === 'idle' && !p.matchId)
-    .map(p => ({ id: p.id, name: p.name }));
+function removeFromQueue(socketId) {
+  let index = matchmakingQueue.indexOf(socketId);
+  while (index !== -1) {
+    matchmakingQueue.splice(index, 1);
+    index = matchmakingQueue.indexOf(socketId);
+  }
+  const player = connectedPlayers.get(socketId);
+  if (player) player.inQueue = false;
+  broadcastQueue(); // Notificar a los demás que alguien salió
+}
 
-  for (const [id, player] of connectedPlayers.entries()) {
-    if (player.registered && player.state === 'idle' && !player.matchId) {
-      io.to(id).emit('lobby-list', availablePlayers);
-    }
+// Nueva función: Envía la lista de jugadores en cola a los que están en la cola
+function broadcastQueue() {
+  const waitingPlayers = matchmakingQueue.map(id => {
+    const p = connectedPlayers.get(id);
+    return p ? { id: p.id, name: p.name } : null;
+  }).filter(Boolean);
+
+  for (const id of matchmakingQueue) {
+    io.to(id).emit('queue-list', waitingPlayers);
   }
 }
 
@@ -108,13 +120,13 @@ function finishMatch(match, winnerId, reason = 'finished') {
     const socket = io.sockets.sockets.get(id);
     if (player) {
       player.matchId = null;
+      player.inQueue = false;
       player.input = emptyInput();
       player.state = 'idle';
     }
     if (socket) socket.leave(match.roomId);
   }
   activeMatches.delete(match.roomId);
-  broadcastLobbyList(); 
 }
 
 function createPlayerState(id, name, side) {
@@ -129,6 +141,7 @@ function createPlayerState(id, name, side) {
     input: emptyInput(),
     fireCooldown: 0,
     matchId: null,
+    inQueue: false,
     state: 'playing',
     registered: true
   };
@@ -138,6 +151,9 @@ function startMatch(firstId, secondId) {
   const first = connectedPlayers.get(firstId);
   const second = connectedPlayers.get(secondId);
   if (!first || !second || !first.registered || !second.registered) return;
+
+  removeFromQueue(firstId);
+  removeFromQueue(secondId);
 
   const matchNumber = nextMatchNumber++;
   const roomId = `caos-match-${matchNumber}`;
@@ -165,9 +181,28 @@ function startMatch(firstId, secondId) {
   firstSocket.emit('match-found', { roomId, opponentName: second.name });
   secondSocket.emit('match-found', { roomId, opponentName: first.name });
   emitMatchState(match);
-  broadcastLobbyList();
-  
   console.log(`[MATCH] ${first.name} vs ${second.name}`);
+}
+
+// Nueva lógica de búsqueda: Solo mete a la cola y actualiza la lista
+function findMatch(socket, player) {
+  if (!player || !player.registered) {
+    socket.emit('queue-status', { status: 'error', message: 'Primero registra tu nombre de jugador.' });
+    return;
+  }
+  if (player.matchId) return;
+  if (player.inQueue) {
+    socket.emit('queue-status', { status: 'waiting' });
+    broadcastQueue(); // Reenviar la lista por si acaso
+    return;
+  }
+
+  player.inQueue = true;
+  player.state = 'queue';
+  matchmakingQueue.push(socket.id);
+  socket.emit('queue-status', { status: 'waiting' });
+  broadcastQueue(); // Avisar a todos los que buscan
+  console.log(`[QUEUE] ${player.name} está buscando rival.`);
 }
 
 function updateMatch(match, dt) {
@@ -246,6 +281,7 @@ io.on('connection', (socket) => {
     id: socket.id,
     name: '',
     registered: false,
+    inQueue: false,
     matchId: null,
     state: 'unregistered',
     input: emptyInput()
@@ -257,32 +293,23 @@ io.on('connection', (socket) => {
 
     const name = normalizeName(payload && payload.name);
     if (!validName(name)) {
-      socket.emit('registration-result', {
-        ok: false,
-        message: 'El nombre debe tener entre 2 y 16 caracteres y usar solo letras, números, espacios, guion o guion bajo.'
-      });
+      socket.emit('registration-result', { ok: false, message: 'Nombre inválido.' });
       return;
     }
 
     const lowerName = name.toLocaleLowerCase();
-    
-    // CORRECCIÓN: Buscar si el nombre ya está en uso por OTRO socket
     const existingPlayerEntry = Array.from(connectedPlayers.entries()).find(([id, other]) => {
       return id !== socket.id && other.registered && other.name.toLocaleLowerCase() === lowerName;
     });
 
     if (existingPlayerEntry) {
-      const [oldId, oldPlayer] = existingPlayerEntry;
+      const [oldId] = existingPlayerEntry;
       const oldSocket = io.sockets.sockets.get(oldId);
-      
       if (oldSocket) {
-        // Si el socket viejo sigue "vivo" en el servidor, lo desconectamos.
-        // Esto pasa normalmente por reconexiones o doble pestaña.
-        console.log(`[CLEANUP] Desconectando sesión duplicada de: ${name}`);
         oldSocket.disconnect(true);
       }
-      // Eliminamos al jugador viejo del mapa para liberar el nombre
       connectedPlayers.delete(oldId);
+      removeFromQueue(oldId);
     }
 
     player.name = name;
@@ -290,22 +317,34 @@ io.on('connection', (socket) => {
     if (player.state === 'unregistered') player.state = 'idle';
     socket.emit('registration-result', { ok: true, name });
     console.log(`[JOIN] ${name} (${socket.id})`);
-    
-    broadcastLobbyList();
   });
 
+  socket.on('find-match', () => {
+    const player = connectedPlayers.get(socket.id);
+    findMatch(socket, player);
+  });
+
+  // NUEVO EVENTO: Cuando alguien hace clic en un jugador de la lista para retarlo
   socket.on('challenge-player', (targetId) => {
     const challenger = connectedPlayers.get(socket.id);
     const target = connectedPlayers.get(targetId);
 
-    if (!challenger || !challenger.registered || challenger.state !== 'idle') return;
-    if (!target || !target.registered || target.state !== 'idle' || target.matchId) {
+    if (!challenger || !challenger.registered || !challenger.inQueue) return;
+    if (!target || !target.registered || !target.inQueue || target.matchId) {
       socket.emit('challenge-error', { message: 'Ese jugador ya no está disponible.' });
-      broadcastLobbyList();
+      broadcastQueue(); // Actualizar lista
       return;
     }
 
     startMatch(socket.id, targetId);
+  });
+
+  socket.on('cancel-matchmaking', () => {
+    const player = connectedPlayers.get(socket.id);
+    if (!player) return;
+    removeFromQueue(socket.id);
+    if (!player.matchId) player.state = player.registered ? 'idle' : 'unregistered';
+    socket.emit('queue-status', { status: 'cancelled' });
   });
 
   socket.on('player-input', (payload) => {
@@ -324,6 +363,7 @@ io.on('connection', (socket) => {
   socket.on('leave-match', () => {
     const player = connectedPlayers.get(socket.id);
     if (!player) return;
+    removeFromQueue(socket.id);
     if (player.matchId) {
       const match = activeMatches.get(player.matchId);
       if (match) {
@@ -335,6 +375,7 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     const player = connectedPlayers.get(socket.id);
+    removeFromQueue(socket.id);
     if (player && player.matchId) {
       const match = activeMatches.get(player.matchId);
       if (match) {
@@ -344,7 +385,6 @@ io.on('connection', (socket) => {
     }
     if (player) console.log(`[LEAVE] ${player.name || socket.id}`);
     connectedPlayers.delete(socket.id);
-    broadcastLobbyList();
   });
 });
 

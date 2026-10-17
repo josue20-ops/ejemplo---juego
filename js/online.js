@@ -33,6 +33,35 @@
     d: 'right', arrowright: 'right'
   };
 
+  // --- NUEVO: Contenedor dinámico para la lista de jugadores buscando ---
+  const queueContainer = document.createElement('div');
+  queueContainer.id = 'queue-list-container';
+  queueContainer.style.marginTop = '15px';
+  queueContainer.style.padding = '10px';
+  queueContainer.style.background = 'rgba(0,0,0,0.4)';
+  queueContainer.style.borderRadius = '6px';
+  queueContainer.style.border = '1px solid rgba(255,255,255,0.1)';
+  queueContainer.style.display = 'none';
+  
+  const queueTitle = document.createElement('p');
+  queueTitle.textContent = 'Jugadores buscando partida (Haz clic para retar):';
+  queueTitle.style.fontSize = '0.9rem';
+  queueTitle.style.marginBottom = '10px';
+  queueTitle.style.color = '#54f2e8';
+  
+  const queueList = document.createElement('ul');
+  queueList.style.listStyle = 'none';
+  queueList.style.padding = '0';
+  queueList.style.margin = '0';
+  
+  queueContainer.appendChild(queueTitle);
+  queueContainer.appendChild(queueList);
+  
+  // Insertamos la lista justo debajo de los botones de buscar/cancelar
+  if ($('cancelQueueBtn')) {
+    $('cancelQueueBtn').parentNode.insertBefore(queueContainer, $('cancelQueueBtn').nextSibling);
+  }
+
   function setConnection(message, isGood = false) {
     const el = $('onlineConnection');
     el.textContent = message;
@@ -46,6 +75,14 @@
   function updateSearchButtons() {
     $('findMatchBtn').disabled = !isRegistered || isSearching || isPlaying;
     $('cancelQueueBtn').classList.toggle('hidden', !isSearching);
+    
+    // Mostrar u ocultar la lista de jugadores en cola
+    if (isSearching) {
+      queueContainer.style.display = 'block';
+    } else {
+      queueContainer.style.display = 'none';
+      queueList.innerHTML = ''; // Limpiar lista
+    }
   }
 
   function resetInput() {
@@ -83,7 +120,7 @@
 
     if (typeof window.io !== 'function') {
       setConnection('Servidor no disponible', false);
-      setMessage('No se detectó el servidor online. Ejecuta npm install y npm start, y abre el juego desde http://localhost:3000.');
+      setMessage('No se detectó el servidor online.');
       $('findMatchBtn').disabled = true;
       return;
     }
@@ -112,7 +149,7 @@
       if (!data || !data.ok) {
         isRegistered = false;
         setConnection('Nombre no disponible', false);
-        setMessage((data && data.message) || 'No se pudo registrar ese nombre. Prueba con otro.');
+        setMessage((data && data.message) || 'No se pudo registrar ese nombre.');
         updateSearchButtons();
         return;
       }
@@ -133,15 +170,65 @@
       if (data.status === 'waiting') {
         isSearching = true;
         isPlaying = false;
-        setMessage('Buscando rival… Mantén esta ventana abierta.');
+        setMessage('Buscando rival… Selecciona a alguien de la lista o espera.');
       } else if (data.status === 'cancelled') {
         isSearching = false;
-        setMessage('Búsqueda cancelada. Cuando quieras, vuelve a buscar.');
+        setMessage('Búsqueda cancelada.');
       } else if (data.status === 'error') {
         isSearching = false;
         setMessage(data.message || 'No se pudo buscar una partida.');
       }
       updateSearchButtons();
+    });
+
+    // --- NUEVO: Recibir y renderizar la lista de la cola ---
+    socket.on('queue-list', (players) => {
+      if (!isSearching) return;
+      
+      queueList.innerHTML = '';
+      const otherPlayers = players.filter(p => p.id !== ownId);
+
+      if (otherPlayers.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'Nadie más está buscando partida aún...';
+        li.style.fontSize = '0.85rem';
+        li.style.color = '#aaa';
+        queueList.appendChild(li);
+      } else {
+        otherPlayers.forEach(player => {
+          const li = document.createElement('li');
+          li.style.marginBottom = '6px';
+          
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'small-btn';
+          btn.style.width = '100%';
+          btn.style.display = 'flex';
+          btn.style.justifyContent = 'space-between';
+          btn.innerHTML = `<span>${player.name}</span> <span style="color:#ff4f91">⚔️ Retar</span>`;
+          
+          btn.addEventListener('click', () => {
+            btn.innerHTML = `<span>${player.name}</span> <span style="color:#aaa">Retando...</span>`;
+            btn.disabled = true;
+            socket.emit('challenge-player', player.id);
+            
+            // Si el servidor no responde con match-found en 3s, reactivar
+            setTimeout(() => { 
+              btn.innerHTML = `<span>${player.name}</span> <span style="color:#ff4f91">⚔️ Retar</span>`; 
+              btn.disabled = false; 
+            }, 3000);
+          });
+
+          li.appendChild(btn);
+          queueList.appendChild(li);
+        });
+      }
+    });
+
+    socket.on('challenge-error', (data) => {
+      alert(data.message);
+      // Forzar actualización de la lista
+      if (isSearching && socket.connected) socket.emit('find-match');
     });
 
     socket.on('match-found', (data) => {
@@ -188,7 +275,7 @@
       isRegistered = false;
       setConnection('No se puede conectar', false);
       if (!lastConnectionError) {
-        setMessage('No se pudo conectar. Comprueba que server.js siga ejecutándose y abre el juego desde http://localhost:3000.');
+        setMessage('No se pudo conectar. Comprueba que server.js siga ejecutándose.');
         lastConnectionError = 'connect_error';
       }
       updateSearchButtons();
@@ -201,7 +288,7 @@
       resetInput();
       setConnection('Desconectado', false);
       if (!onlineScreen.classList.contains('hidden')) {
-        setMessage('Se perdió la conexión con el servidor. Espera unos segundos o vuelve al menú y entra de nuevo.');
+        setMessage('Se perdió la conexión con el servidor.');
       }
       updateSearchButtons();
     });
@@ -256,7 +343,7 @@
     lobby.classList.remove('hidden');
     isPlaying = false;
     isSearching = true;
-    setMessage('Buscando rival… Si nadie está conectado, espera a que entre otro jugador.');
+    setMessage('Buscando rival… Selecciona a alguien de la lista o espera.');
     updateSearchButtons();
     socket.emit('find-match');
   }
@@ -331,31 +418,6 @@
     ctx.shadowBlur = 6; ctx.shadowColor = '#000';
     ctx.fillText(player.name, player.x, player.y - 31);
     ctx.restore();
-  }
-
-  function draw() {
-    animationTime += Math.min(.035, (performance.now() - lastRenderTime) / 1000 || 0);
-    drawBackground();
-
-    // Mensaje previo a encontrar rival o si el servidor está en marcha pero aún no llega el snapshot.
-    if (!latestState && isPlaying) {
-      ctx.fillStyle = 'rgba(238,243,255,.75)';
-      ctx.font = 'bold 18px system-ui';
-      ctx.textAlign = 'center';
-      ctx.fillText('Conectando con la arena…', WIDTH / 2, HEIGHT / 2);
-    }
-
-    if (latestState) {
-      for (const bullet of (latestState.bullets || [])) {
-        ctx.save();
-        ctx.fillStyle = bullet.color || '#ffffff';
-        ctx.shadowBlur = 16;
-        ctx.shadowColor = bullet.color || '#ffffff';
-        ctx.beginPath(); ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-      }
-      for (const player of (latestState.players || [])) drawPlayer(player);
-    }
   }
 
   function animationLoop(now) {
@@ -477,7 +539,6 @@
   fireTouch.addEventListener('pointerup', () => { input.fire = false; sendInput(); });
   fireTouch.addEventListener('pointercancel', () => { input.fire = false; sendInput(); });
 
-  // Mantener el estado de las teclas sincronizado aunque no se produzca un evento nuevo.
   window.setInterval(() => {
     if (!isPlaying) return;
     input.up = input.up || keys.has('w') || keys.has('arrowup');
